@@ -1,81 +1,40 @@
-# LOTTO AI – Eurojackpot Lab (PWA 1.0)
+# LOTTO AI – Eurojackpot Lab (PWA 2.0)
 
-Mobilní webová aplikace pro Android (i počítač) v češtině. Nevyžaduje účet, API klíč ani serverové výpočty. Jde o statistický experiment, **ne o spolehlivou předpověď loterie**.
+**Statistický experiment, nikoli předpověď s garantovanou výhodou.** Aplikace neobsahuje systém pro sázení ani platební funkce.
 
-## Instalace na Android
+## Nové funkce verze 2.0
 
-PWA se dá instalovat pouze z webové adresy na **HTTPS** (případně při vývoji z `localhost`). Samotné otevření ZIP nebo souboru `index.html` nedokáže aplikaci plnohodnotně nainstalovat, protože service worker vyžaduje bezpečný původ.
+- **Ensemble** – kombinuje trendy 5/75, antitrend a historickou četnost. Váhy se odhadují z posledních 24 předchozích tahů; každý validační krok používá pouze starší výsledky. Není to neuronová síť.
+- **Vlastní filtry** – vyřazení posledního tahu, ruční vyřazení čísel 1–50, filtr krajních čísel posledních 12 tahů, pevná dvojice euročísel nebo výběr podle četnosti. Omezení počtu sloupců a překryvů.
+- **Walk-forward** – test jednotlivé metody s porovnáním proti náhodnému výběru, vyhodnocení výherních tříd, graf kumulativních zásahů. Srovnání čtyř metod na stejných minulých tazích. Pokud si vybereš nejlepší model až podle těchto dat, jde o dodatečný výběr, který zkresluje budoucí odhady.
+- **Aktualizace historie při otevření** – volitelná automatická kontrola komunitního archivu. Vyžaduje internet a dostupnost zdroje; nejde o zaručené oficiální živé napojení. Ručně importovaná data mají při konfliktu přednost před externími údaji.
+- **Evidence tiketů** – vygenerovaný tiket lze výslovně uložit, poté se automaticky vyhodnotí při načtení prvního následujícího losování, včetně výherní třídy a exportu CSV. Nezapočítává výši výhry ani náklady.
 
-1. Rozbal ZIP soubor `LOTTO_AI_Eurojackpot_PWA.zip`.
-2. Nahraj **obsah složky** `lotto-ai-pwa` včetně podsložek `data/` a `icons/` na libovolný statický HTTPS hosting (např. GitHub Pages nebo Netlify). `index.html` musí být v kořenovém adresáři zveřejněné stránky.
-3. V telefonu otevři zveřejněnou HTTPS adresu v prohlížeči Chrome.
-4. V nabídce **⋮** vyber **Instalovat aplikaci** (nebo **Přidat na plochu**, podle verze prohlížeče).
-5. Po prvním načtení jsou základní soubory dostupné offline; výsledky zůstávají v prohlížeči v lokálním úložišti.
+## Aktualizace stávajícího GitHub Pages
 
-### Rychlá ukázka ještě před nasazením
+Repozitář: <https://github.com/tomassedlar25-droid/lotto-ai-eurojackpot>
 
-Samostatný soubor `LOTTO_AI_nahled.html` funguje po otevření v kompatibilním prohlížeči i bez hostingu. Obsahuje data a všechny výpočty, ale **není instalovatelná PWA** a offline aktualizace výsledků vyžaduje internet. Někteří správci souborů pro Android nemusí spouštět JavaScript v HTML náhledu; v takovém případě otevři soubor přímo v prohlížeči nebo použij HTTPS hosting.
+1. Rozbal aktualizační ZIP `LOTTO_AI_2_0_GitHub_UPDATE.zip`.
+2. Na GitHubu zvol `Add file > Upload files` a nahraj soubory **přímo do kořene repozitáře** (stejně jako původní `index.html`).
+3. Nahraď soubory: `index.html`, `styles.css`, `app.js`, `core.mjs`, `manifest.webmanifest`, `service-worker.js` a `README.md`.
+4. **Nemaž ani nenahrazuj** `data/eurojackpot.csv`, adresář `data`, obrázky `icon-192.png` a `icon-512.png`. Aktualizační ZIP je úmyslně neobsahuje.
+5. `Commit changes` na větvi `main`. Po nasazení otevři GitHub Pages v Chrome a stránku načti znovu; služba service worker obvykle aktualizaci převezme během následujícího otevření, případně stránku obnov dvakrát.
+6. Ověř nápis `LAB 2.0` a kartu **Moje tikety**.
 
-## Obsah
+URL: <https://tomassedlar25-droid.github.io/lotto-ai-eurojackpot/>
 
-- `index.html`, `styles.css`, `app.js` — mobilní uživatelské rozhraní.
-- `core.mjs` — kontrola importu, historické statistiky, generátor a walk-forward backtest.
-- `data/eurojackpot.csv` — **128 skutečných losování** (18. 7. 2025 – 6. 10. 2026) pro okamžitý offline start. Kompletní dostupná historie od roku 2012 se automaticky pokusí stáhnout při připojení k internetu.
-- `manifest.webmanifest`, `service-worker.js`, `icons/` — PWA instalace a základní offline režim.
-- `tests.mjs` — kontrolní testy spustitelné příkazem `node tests.mjs`.
+## Zachování dat
 
-## Historie a aktualizace
+Stávající historie z `localStorage` zůstává pod původním klíčem `lotto-ai-eurojackpot-history-v1`. Nové uložené tikety používají nový klíč `lotto-ai-eurojackpot-tickets-v2`. *Nemaž data webu / Chrome ani znovu neinstaluj aplikaci bez exportu archivů.*
 
-Veřejný CSV archiv: https://github.com/dev-baris/lottery-archive (`eu/eurojackpot/results.csv`).
+## Omezení, bezpečnost a reprodukovatelnost
 
-Aplikace se při startu automaticky pokusí načíst aktuální veřejný CSV soubor, který následně uloží lokálně. Tlačítko **Stáhnout aktualizace** dovoluje opakovaný pokus. Aktuálnost není zaručena: zdroj spravuje komunita, může mít výpadek a nové losování se může objevit se zpožděním. Před nákupem tiketu ověř výsledky oficiálně.
+- Všechna losování Eurojackpotu jsou nezávislá; heuristický model **nemá prokázanou predikční výhodu** proti čistě náhodnému výběru.
+- Vlastní filtry zadané zpětně mohou způsobit selection bias. Výsledky testů nejsou prognózou výher.
+- Zkušební data ve zdrojové vývojové složce pokrývají 128 tahů. V živém repozitáři uživatele je delší archiv, který není aktualizačním ZIPem nahrazen.
+- PWA běží bez vlastního serveru a uchovává tikety v místním prohlížeči. Ztráta dat aplikace odstraní lokální historii tiketů. Používej export.
+- Přesnost externího komunitního archivu si před sázením ověř u provozovatele loterie.
 
-Ruční import podporuje následující formáty:
+## Kontrolní testy
 
-```csv
-date,n1,n2,n3,n4,n5,e1,e2
-2026-10-06,7,12,19,28,50,1,6
-```
-
-nebo
-
-```csv
-datum;z1;z2;z3;z4;z5;eurozahlen;wochentag;jahr
-06.10.2026;7;12;19;28;50;1-6;Úterý;2026
-```
-
-Podporován je také export historie a manuální přidání výsledku. Duplicitní datum se aktualizuje novou hodnotou.
-
-## Modely
-
-- **Trend Z 5/75** – srovnání normalizované odchylky četnosti v posledních 5 a 75 tazích.
-- **Antitrend Z 5/75** – obrácené pořadí trendové metriky.
-- **Četnost 75** – preferuje výskyty v posledních 75 losováních.
-- **Náhodná metoda** – náhodně vážené výběry.
-- **Filtr EJP ZERO** (volitelný): vyřadí nejmenší a největší z pěti seřazených hlavních čísel v každém z posledních 12 tahů.
-- Omezení počtu hlavních kandidátů a maximálního překryvu hlavních čísel mezi sloupci; pokud limit nelze splnit, zobrazí varování.
-- Euročísla ve strategických sloupcích: dvě nejčastější nepřekrývající se dvojice z posledních 15 tahů (pokud není zvolena náhodná metoda).
-
-**Backtest:** Chronologicky se pro každé testované losování vygeneruje portfolio POUZE na základě všech dříve známých výsledků. Nejprve lze trénovat na min. 75 losováních. Testy se omezují na éru současných pravidel od 25. 3. 2022. Porovnává se stejně velké náhodné portfolio (bez filtru). Zobrazeny jsou výherní třídy (nikoli finanční zisk), počty tiketů s alespoň třemi hlavními zásahy a podíl losování s výherní třídou.
-
-Historická četnost nepředstavuje predikční výhodu: Eurojackpot je navržen jako náhodné losování a minulé tahy nemají předvídat další.
-
-## Vývojářská kontrola
-
-Lokální spuštění:
-
-```bash
-python -m http.server 8000
-```
-
-V prohlížeči otevři `http://localhost:8000`.
-
-Testy:
-
-```bash
-node tests.mjs
-```
-
-## Bezpečnost a limity
-
-Žádné platby, sázení, cookies třetích stran ani sledovací skripty. Při aktualizaci dat se aplikace připojuje na `raw.githubusercontent.com`; jinak funguje lokálně. Používej pouze ve věku 18+. Ztráty při hazardní hře jsou možné; modely negarantují žádný zisk. PWA není APK, není publikována v Google Play a tento balíček zatím nemá veřejnou URL.
+`node tests-v2.mjs` v kompletní vývojové složce (data jsou v `data/eurojackpot.csv`).

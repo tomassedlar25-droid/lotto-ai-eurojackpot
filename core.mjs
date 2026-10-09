@@ -1,5 +1,5 @@
 /* LOTTO AI — analysis engine. No external dependencies; all models are heuristic. */
-export const RELEASE='1.0.0';
+export const RELEASE='2.0.0';
 export const HISTORY_URL='https://raw.githubusercontent.com/dev-baris/lottery-archive/main/eu/eurojackpot/results.csv';
 export const MAX_EURO=12;
 export const euroPoolAt=date=>date<'2014-10-10'?8:date<'2022-03-25'?10:12;
@@ -80,10 +80,38 @@ function recentZ(history,w,n,kind){const slice=history.slice(-w), sample= slice.
     return (o.count-o.expected)/Math.sqrt(Math.max(v,.1));
   });}
 export function positionalBlacklist(history,lastN=12){const banned=new Set();for(const d of history.slice(-lastN)){banned.add(d.main[0]);banned.add(d.main[4]);}return [...banned].sort((a,b)=>a-b);}
-export function ranking(history,{strategy='trend',filter=true}={}){
-  const ban=filter?new Set(positionalBlacklist(history)):new Set();
+// Ensemble weights are calibrated using ONLY earlier draws, never the draw being forecast.
+export function ensembleWeights(history,windows=24){
+  const names=['trend','antitrend','frequency'];
+  const start=Math.max(75,history.length-Math.max(5,Math.min(40,windows)));
+  const points=names.map(()=>0);let checked=0;
+  for(let i=start;i<history.length;i++){
+    const past=history.slice(0,i),actual=history[i].main;
+    names.forEach((name,j)=>{
+      const top=ranking(past,{strategy:name,filter:false}).slice(0,12).map(x=>x.num);
+      points[j]+=intersection(top,actual);
+    });checked++;
+  }
+  // Shrink toward equal weights; the retrospective score is descriptive, not predictive proof.
+  const raw=points.map(n=>1+(checked?n/(checked*5):0)),total=raw.reduce((a,b)=>a+b,0);
+  return Object.fromEntries(names.map((n,i)=>[n,raw[i]/total]));
+}
+export function ranking(history,{strategy='trend',filter=true,excludeLast=false,manualExclude=[]}={}){
+  const ban=new Set(filter?positionalBlacklist(history):[]);
+  if(excludeLast&&history.length)history.at(-1).main.forEach(n=>ban.add(n));
+  for(const n of manualExclude||[])if(Number.isInteger(n)&&n>=1&&n<=50)ban.add(n);
+  if(strategy==='ensemble'){
+    const weights=ensembleWeights(history);
+    const scores=Array(51).fill(0);
+    for(const [model,w] of Object.entries(weights)){
+      const sorted=ranking(history,{strategy:model,filter:false});
+      sorted.forEach((item,index)=>{scores[item.num]+=w*(50-index)/50;});
+    }
+    return Array.from({length:50},(_,i)=>({num:i+1,score:scores[i+1],excluded:ban.has(i+1)}))
+      .sort((a,b)=>b.score-a.score||a.num-b.num);
+  }
   const a=recentZ(history,5,50,'main'),b=recentZ(history,75,50,'main');
-  const counts=frequency(history,'main',75), rng=rand(hash(history.at(-1)?.date||'start'));
+  const counts=frequency(history,'main',75),rng=rand(hash(history.at(-1)?.date||'start'));
   return Array.from({length:50},(_,i)=>({num:i+1,score:strategy==='random'?rng():strategy==='frequency'?counts[i].ratio:strategy==='antitrend'?b[i]-a[i]:a[i]-b[i],excluded:ban.has(i+1)}))
     .sort((x,y)=>y.score-x.score||x.num-y.num);
 }
@@ -93,10 +121,10 @@ function weightedPick(pool,size,rng,used){let available=[...pool],picked=[];for(
   picked.push(available[idx].num);available.splice(idx,1);
 }return sortNums(picked);}
 export function generateTickets(history,settings={}){
-  const opts={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,seed:1,...settings};
+  const opts={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],seed:1,...settings};
   if(!Number.isInteger(opts.count)||opts.count<1||opts.count>30)throw Error('Počet tiketů musí být 1–30.');
   if(!history.length)throw Error('Nejdříve načti alespoň jedno losování.');
-  const ranked=ranking(history,opts),ban=opts.filter?positionalBlacklist(history):[];
+  const ranked=ranking(history,opts),ban=ranked.filter(x=>x.excluded).map(x=>x.num).sort((a,b)=>a-b);
   const candidates=ranked.filter(x=>!x.excluded).slice(0,Math.max(5,Math.min(50,Number(opts.pool)||12)));
   if(candidates.length<5)throw Error('Filtr vyřadil příliš mnoho čísel.');
   const pool=candidates.map((x,i)=>({num:x.num,weight:opts.strategy==='random'?0:1.35*(candidates.length-1-i)/Math.max(candidates.length-1,1)}));
@@ -104,7 +132,13 @@ export function generateTickets(history,settings={}){
   const rng=rand(hash(history.at(-1)?.date)+Number(opts.seed)*1009);
   const euroOrder=opts.strategy==='random'?Array.from({length:12},(_,i)=>i+1):euroRanks.map(x=>x.num);
   if(opts.strategy==='random')for(let i=euroOrder.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[euroOrder[i],euroOrder[j]]=[euroOrder[j],euroOrder[i]];}
-  const pairs=[sortNums(euroOrder.slice(0,2)),sortNums(euroOrder.slice(2,4))];
+  let pairs=[sortNums(euroOrder.slice(0,2)),sortNums(euroOrder.slice(2,4))];
+  if(opts.euroMode==='top')pairs=[pairs[0]];
+  if(opts.euroMode==='fixed'){
+    const nums=opts.fixedEuro||[];
+    if(nums.length!==2||new Set(nums).size!==2||nums.some(n=>!Number.isInteger(n)||n<1||n>12))throw Error('Zadej dvě různá euročísla od 1 do 12.');
+    pairs=[sortNums(nums)];
+  }
   const used=new Map();let tickets=[],violations=0;
   for(let j=0;j<opts.count;j++){
     let picked=null,best=null,bestPenalty=Infinity;
@@ -116,11 +150,12 @@ export function generateTickets(history,settings={}){
     }
     picked ||= best;if(bestPenalty>0)violations++;
     for(const n of picked)used.set(n,(used.get(n)||0)+1);
-    tickets.push({main:picked,euro:pairs[j%2]});
+    tickets.push({main:picked,euro:pairs[j%pairs.length]});
   }
-  return {tickets,blacklist:ban,candidates:candidates.map(x=>x.num),euroPairs:pairs,overlapWarnings:violations};
+  return {tickets,blacklist:ban,candidates:candidates.map(x=>x.num),euroPairs:pairs,overlapWarnings:violations,weights:opts.strategy==='ensemble'?ensembleWeights(history):null};
 }
 export function intersection(a,b){return a.reduce((count,x)=>count+Number(b.includes(x)),0);}
+export function ticketHits(ticket,result){const main=intersection(ticket.main,result.main),euro=intersection(ticket.euro,result.euro);return {main,euro,tier:prizeTier(main,euro)};}
 export function prizeTier(m,e){
   const tiers={'5-2':1,'5-1':2,'5-0':3,'4-2':4,'4-1':5,'3-2':6,'4-0':7,'2-2':8,'3-1':9,'3-0':10,'1-2':11,'2-1':12};return tiers[`${m}-${e}`]||null;
 }
@@ -143,14 +178,27 @@ export function backtest(draws,opts={}){
   for(let i=config.minTrain;i<draws.length;i++)if(draws[i].date>='2022-03-25')eligible.push(i);
   const indices=eligible.slice(-Math.min(500,Math.max(1,Number(config.testDraws)||100)));
   if(!indices.length)throw Error('Pro backtest je potřeba více historie.');
-  const model=newAcc(),baseline=newAcc();let warnings=0;
+  const model=newAcc(),baseline=newAcc(),timeline=[];let warnings=0;
   for(const i of indices){
     const past=draws.slice(0,i),result=draws[i];
     const generated=generateTickets(past,{...config,seed:i+config.seed});
     warnings+=generated.overlapWarnings;
     evaluate(generated.tickets,result,model);
-    const rnd=generateTickets(past,{...config,strategy:'random',filter:false,pool:50,seed:i+config.seed+8888,maxOverlap:2});
+    const rnd=generateTickets(past,{...config,strategy:'random',filter:false,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],pool:50,seed:i+config.seed+8888,maxOverlap:config.maxOverlap});
     evaluate(rnd.tickets,result,baseline);
+    timeline.push({date:result.date,model: model.threePlus,baseline:baseline.threePlus,modelHits:model.totalMain,baselineHits:baseline.totalMain});
   }
-  return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings};
+  return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings,timeline};
+}
+
+export function compareStrategies(draws,config={}){
+  const strategies=['ensemble','trend','antitrend','frequency'];
+  const results=strategies.map(strategy=>({strategy,...backtest(draws,{...config,strategy})}));
+  return results.sort((a,b)=>b.model.threePlus-a.model.threePlus || b.model.totalMain-a.model.totalMain || a.strategy.localeCompare(b.strategy));
+}
+export function evaluateSavedSet(set,draws){
+  const next=draws.find(d=>d.date>set.asOf);
+  if(!next)return {status:'pending',result:null,hits:[]};
+  const hits=set.tickets.map(t=>ticketHits(t,next));
+  return {status:'drawn',result:next,hits,prizes:hits.filter(h=>h.tier).length,threePlus:hits.filter(h=>h.main>=3).length};
 }
