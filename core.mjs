@@ -6,7 +6,7 @@ export const euroPoolAt=date=>date<'2014-10-10'?8:date<'2022-03-25'?10:12;
 export function parseDate(raw){
   const s=String(raw??'').trim().replace(/^\uFEFF/,'');
   if(/^\d{4}-\d\d-\d\d$/.test(s))return isRealDate(s)?s:null;
-  let m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+  let m=s.match(/^(\d{1,2})\s*[.\/-]\s*(\d{1,2})\s*[.\/-]\s*(\d{4})$/);
   if(!m)return null;
   const iso=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   return isRealDate(iso)?iso:null;
@@ -39,8 +39,8 @@ export function parseCsv(text){
   const hdr=header?first.map(normalized):[];
   const find=(variants)=>hdr.findIndex(h=>variants.includes(h));
   const dateIdx=header?find(['date','datum','drawdate','datumslosovani','drawingdate']):0;
-  const mainIdx=header?Array.from({length:5},(_,i)=>find([`n${i+1}`,`z${i+1}`,`main${i+1}`,`number${i+1}`,`zahl${i+1}`])):[1,2,3,4,5];
-  const euroIdx=header?Array.from({length:2},(_,i)=>find([`e${i+1}`,`euro${i+1}`,`euronumber${i+1}`,`euronum${i+1}`])):[6,7];
+  const mainIdx=header?Array.from({length:5},(_,i)=>find([`n${i+1}`,`z${i+1}`,`main${i+1}`,`number${i+1}`,`zahl${i+1}`,`${i+1}cisloz1osudi`])):[1,2,3,4,5];
+  const euroIdx=header?Array.from({length:2},(_,i)=>find([`e${i+1}`,`euro${i+1}`,`euronumber${i+1}`,`euronum${i+1}`,`${i+1}cisloz2osudi`])):[6,7];
   const combinedIdx=header?find(['eurozahlen','euronumbers','eurodigits']):-1;
   if(dateIdx<0||mainIdx.some(x=>x<0)|| (euroIdx.some(x=>x<0)&&combinedIdx<0)){
     throw new Error('Neznámé CSV sloupce. Očekávám date,n1,n2,n3,n4,n5,e1,e2 nebo datum;z1;…;z5;eurozahlen.');
