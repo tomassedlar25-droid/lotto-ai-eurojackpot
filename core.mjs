@@ -1,5 +1,5 @@
 /* LOTTO AI — analysis engine. No external dependencies; all models are heuristic. */
-export const RELEASE='2.1.0';
+export const RELEASE='2.2.0';
 export const HISTORY_URL='https://raw.githubusercontent.com/dev-baris/lottery-archive/main/eu/eurojackpot/results.csv';
 export const MAX_EURO=12;
 export const euroPoolAt=date=>date<'2014-10-10'?8:date<'2022-03-25'?10:12;
@@ -96,6 +96,40 @@ export function ensembleWeights(history,windows=24){
   const raw=points.map(n=>1+(checked?n/(checked*5):0)),total=raw.reduce((a,b)=>a+b,0);
   return Object.fromEntries(names.map((n,i)=>[n,raw[i]/total]));
 }
+
+// Ten independent, explicitly heuristic ranking algorithms, always trained on past draws only.
+export const EXTRA_METHODS={hot15:'Horká čísla (15)',cold30:'Studená čísla (30)',gap:'Nejdelší absence',hazard:'Poměr absence / očekávání',decay:'Exponenciální paměť',momentum:'Momentum 10/50',reversal:'Obrat 10/50',pairs:'Vazba na poslední tah',ending:'Koncové číslice',bayes:'Bayesův odhad'};
+export function methodRanking(history,kind='main',method='hot15',targetDate=null){
+ const n=kind==='main'?50:euroPoolAt(targetDate||history.at(-1)?.date||'2026-10-09');
+ const k=kind==='main'?5:2;
+ const eligible=history.filter(d=>kind==='main'||d.date<= (targetDate||'9999-12-31'));
+ const seq=eligible.map(d=>d[kind]);
+ const count=(length)=>{let a=Array(n).fill(0),seen=Array(n).fill(0);for(const arr of seq.slice(-length))for(const v of arr)if(v<=n){a[v-1]++;seen[v-1]++;}return a;};
+ const q15=count(15),q10=count(10),q30=count(30),q50=count(50),q100=count(100);
+ const gap=Array(n).fill(seq.length);for(let j=seq.length-1;j>=0;j--)for(const v of seq[j])if(v<=n&&gap[v-1]===seq.length)gap[v-1]=seq.length-j-1;
+ const prior=Array(n).fill(0),last=seq.at(-1)||[];
+ if(method==='pairs'&&seq.length>1){let denom=0;for(let i=1;i<seq.length;i++)if(last.some(x=>seq[i-1].includes(x))){denom++;for(const v of seq[i])if(v<=n)prior[v-1]++;}if(!denom)q50.forEach((v,i)=>prior[i]=v);}
+ const digit=Array(10).fill(0);for(const arr of seq.slice(-60))for(const v of arr)if(v<=n)digit[v%10]++;
+ const scores=Array.from({length:n},(_,i)=>{
+  const f=(a,w)=>a[i]/Math.max(1,Math.min(seq.length,w))*n/k;
+  const p=(kind==='euro'?seq.slice(-60).reduce((sum,d,j)=>sum+((i+1<=euroPoolAt(eligible.at(-Math.min(60,seq.length)+j)?.date||'2026-10-09'))?2/euroPoolAt(eligible.at(-Math.min(60,seq.length)+j).date):0),0)/Math.max(1,Math.min(60,seq.length)):k/n);
+  switch(method){
+   case 'hot15':return f(q15,15);
+   case 'cold30':return -f(q30,30);
+   case 'gap':return gap[i];
+   case 'hazard':return gap[i]*Math.max(p,.05);
+   case 'decay':{let s=0,z=0;for(let j=seq.length-1;j>=Math.max(0,seq.length-60);j--){let w=Math.pow(.93,seq.length-1-j);z+=w;if(seq[j].includes(i+1))s+=w;}return s/Math.max(z,.01)*n/k;}
+   case 'momentum':return f(q10,10)-f(q50,50);
+   case 'reversal':return f(q50,50)-f(q10,10);
+   case 'pairs':return prior[i]+.001*f(q50,50);
+   case 'ending':return digit[(i+1)%10]/Math.max(1,seq.length);
+   case 'bayes':return (q100[i]+2*k/n)/(Math.min(seq.length,100)+2);
+   default:throw Error('Neznámá metodika '+method);
+  }
+ });
+ return scores.map((score,i)=>({num:i+1,score})).sort((a,b)=>b.score-a.score||a.num-b.num);
+}
+
 export function ranking(history,{strategy='trend',filter=true,excludeLast=false,manualExclude=[]}={}){
   const ban=new Set(filter?positionalBlacklist(history):[]);
   if(excludeLast&&history.length)history.at(-1).main.forEach(n=>ban.add(n));
@@ -110,6 +144,7 @@ export function ranking(history,{strategy='trend',filter=true,excludeLast=false,
     return Array.from({length:50},(_,i)=>({num:i+1,score:scores[i+1],excluded:ban.has(i+1)}))
       .sort((a,b)=>b.score-a.score||a.num-b.num);
   }
+  if(EXTRA_METHODS[strategy])return methodRanking(history,'main',strategy).map(x=>({...x,excluded:ban.has(x.num)}));
   const a=recentZ(history,5,50,'main'),b=recentZ(history,75,50,'main');
   const counts=frequency(history,'main',75),rng=rand(hash(history.at(-1)?.date||'start'));
   return Array.from({length:50},(_,i)=>({num:i+1,score:strategy==='random'?rng():strategy==='frequency'?counts[i].ratio:strategy==='antitrend'?b[i]-a[i]:a[i]-b[i],excluded:ban.has(i+1)}))
@@ -121,7 +156,7 @@ function weightedPick(pool,size,rng,used){let available=[...pool],picked=[];for(
   picked.push(available[idx].num);available.splice(idx,1);
 }return sortNums(picked);}
 export function generateTickets(history,settings={}){
-  const opts={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],seed:1,...settings};
+  const opts={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,excludeLast:false,manualExclude:[],euroMode:'portfolio',euroStrategy:'hot15',fixedEuro:[],seed:1,...settings};
   if(!Number.isInteger(opts.count)||opts.count<1||opts.count>30)throw Error('Počet tiketů musí být 1–30.');
   if(!history.length)throw Error('Nejdříve načti alespoň jedno losování.');
   const ranked=ranking(history,opts),ban=ranked.filter(x=>x.excluded).map(x=>x.num).sort((a,b)=>a-b);
@@ -131,9 +166,11 @@ export function generateTickets(history,settings={}){
   const euroMax=euroPoolAt(opts.targetDate||'2026-10-09');
   const euroRanks=frequency(history,'euro',15).filter(x=>x.num<=euroMax).sort((a,b)=>b.count-a.count||a.num-b.num);
   const rng=rand(hash(history.at(-1)?.date)+Number(opts.seed)*1009);
-  const euroOrder=opts.strategy==='random'?Array.from({length:euroMax},(_,i)=>i+1):euroRanks.map(x=>x.num);
-  if(opts.strategy==='random')for(let i=euroOrder.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[euroOrder[i],euroOrder[j]]=[euroOrder[j],euroOrder[i]];}
-  let pairs=[sortNums(euroOrder.slice(0,2)),sortNums(euroOrder.slice(2,4))];
+  const euroOrder=opts.euroMode==='model'?methodRanking(history,'euro',opts.euroStrategy,opts.targetDate):null;
+  const orderedEuro=euroOrder?euroOrder.map(x=>x.num):opts.strategy==='random'?Array.from({length:euroMax},(_,i)=>i+1):euroRanks.map(x=>x.num);
+  if(opts.strategy==='random')for(let i=orderedEuro.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[orderedEuro[i],orderedEuro[j]]=[orderedEuro[j],orderedEuro[i]];}
+  let pairs=[sortNums(orderedEuro.slice(0,2)),sortNums(orderedEuro.slice(2,4))];
+  if(opts.euroMode==='model'&&orderedEuro.length<4)throw Error('Nedostatek euročísel.');
   if(opts.euroMode==='top')pairs=[pairs[0]];
   if(opts.euroMode==='fixed'){
     const nums=opts.fixedEuro||[];
@@ -196,7 +233,7 @@ export function backtest(draws,opts={}){
 }
 
 export function compareStrategies(draws,config={}){
-  const strategies=['ensemble','trend','antitrend','frequency'];
+  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...(EXTRA_METHODS[config.strategy]?[config.strategy]:[])])];
   const results=strategies.map(strategy=>({strategy,...backtest(draws,{...config,strategy})}));
   return results.sort((a,b)=>b.model.threePlus-a.model.threePlus || b.model.totalMain-a.model.totalMain || a.strategy.localeCompare(b.strategy));
 }
@@ -231,7 +268,7 @@ export async function backtestAsync(draws,opts={},onProgress=()=>{}){
   return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings,timeline,dates:indices.map(i=>draws[i].date)};
 }
 export async function compareStrategiesAsync(draws,opts={},progress=()=>{}){
-  const strategies=['ensemble','trend','antitrend','frequency'],out=[];
+  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...(EXTRA_METHODS[opts.strategy]?[opts.strategy]:[])])],out=[];
   for(let i=0;i<strategies.length;i++){
     const strategy=strategies[i];const r=await backtestAsync(draws,{...opts,strategy},fraction=>progress(strategy,(i+fraction)/strategies.length));
     out.push({strategy,...r});await yieldUI();

@@ -1,4 +1,4 @@
-import {RELEASE,HISTORY_URL,parseCsv,toCsv,mergeDraws,frequency,ranking,generateTickets,backtestAsync,compareStrategiesAsync,monteCarloBenchmarks,financeFromBacktest,parsePayoutCsv,evaluateSavedSet} from './core.mjs';
+import {RELEASE,HISTORY_URL,parseCsv,toCsv,mergeDraws,frequency,ranking,generateTickets,backtestAsync,compareStrategiesAsync,monteCarloBenchmarks,financeFromBacktest,parsePayoutCsv,evaluateSavedSet,EXTRA_METHODS} from './core.mjs';
 const $=id=>document.getElementById(id);
 const STORE='lotto-ai-eurojackpot-history-v1';
 const SAVED='lotto-ai-eurojackpot-tickets-v2', AUTO='lotto-ai-autoupdate-v2', PAYOUT_STORE='lotto-ai-eurojackpot-payouts-v21';
@@ -19,8 +19,8 @@ const parseNums=(text,max)=>{
  if(nums.some(x=>!Number.isInteger(x)||x<1||x>max))throw Error('Čísla musí být v rozsahu 1–'+max+'.');
  return [...new Set(nums)];
 };
-const labels={ensemble:'LOTTO Ensemble AI',trend:'Trend Z 5/75',antitrend:'Antitrend Z 5/75',frequency:'Četnost',random:'Náhoda'};
-const settings=()=>({strategy:$('strategy').value,count:Number($('ticketCount').value),pool:Number($('pool').value),filter:$('positionalFilter').checked,maxOverlap:Number($('maxOverlap').value),excludeLast:$('excludeLast').checked,manualExclude:parseNums($('manualExclude').value,50),euroMode:$('euroMode').value,fixedEuro:$('euroMode').value==='fixed'?parseNums($('fixedEuro').value,12):[]});
+const labels={ensemble:'LOTTO Ensemble AI',trend:'Trend Z 5/75',antitrend:'Antitrend Z 5/75',frequency:'Četnost',random:'Náhoda',...EXTRA_METHODS};
+const settings=()=>({strategy:$('strategy').value,count:Number($('ticketCount').value),pool:Number($('pool').value),filter:$('positionalFilter').checked,maxOverlap:Number($('maxOverlap').value),excludeLast:$('excludeLast').checked,manualExclude:parseNums($('manualExclude').value,50),euroMode:$('euroMode').value,euroStrategy:$('euroStrategy').value,fixedEuro:$('euroMode').value==='fixed'?parseNums($('fixedEuro').value,12):[]});
 function loadSets(){try{const value=JSON.parse(localStorage.getItem(SAVED)||'[]');if(Array.isArray(value))savedSets=value.filter(s=>/^\d{4}-\d\d-\d\d$/.test(s.asOf)&&Array.isArray(s.tickets)&&s.tickets.every(t=>t.main?.length===5&&t.euro?.length===2)).slice(-100);}catch{savedSets=[];}}
 function persistSets(){try{localStorage.setItem(SAVED,JSON.stringify(savedSets));return true;}catch{toast('Nelze uložit sestavy, exportuj si je.',true);return false;}}
 
@@ -60,7 +60,7 @@ function generate(){try{
  $('ticketResults').innerHTML=`<div class="result-head"><div><h3>Vygenerované kombinace</h3><p>${labels[config.strategy]||'Model'} · ${generated.tickets.length} sloupců</p></div><button class="btn mini" id="downloadTickets" type="button">↓ TXT</button></div>
  ${generated.tickets.map((t,i)=>`<div class="ticket"><div class="ticket-index">${String(i+1).padStart(2,'0')}</div><div class="ticket-balls">${ticketBalls(t.main,t.euro)}</div></div>`).join('')}
  <button class="btn primary wide" id="saveTicketSet" type="button">▤ Uložit sestavu pro další losování</button>
- <article class="panel"><div class="eyebrow">MODEL A OMEZENÍ</div><div class="ticket-meta"><strong>Kandidáti:</strong> ${generated.candidates.join(', ')}<br><strong>Euro dvojice:</strong> ${generated.euroPairs.map(p=>p.join(' + ')).join(' / ')}<br><strong>Vyřazeno:</strong> ${generated.blacklist.length?generated.blacklist.join(', '):'nic'}${generated.weights?'<br><strong>Váhy Ensemble:</strong> '+Object.entries(generated.weights).map(([k,v])=>`${labels[k]} ${Math.round(v*100)} %`).join(' · '):''}</div><div class="fine-print">${generated.overlapWarnings?`U ${generated.overlapWarnings} kombinací nebylo možné dodržet maximální překryv. Zvětši pool, uprav limit nebo vypni část filtrů.`:'Všechny kombinace dodržují limit překryvu.'} Frekvence euročísel vychází z posledních 15 tahů, pokud nepoužiješ vlastní dvojici. Nejde o spolehlivou předpověď.</div></article>`;
+ <article class="panel"><div class="eyebrow">MODEL A OMEZENÍ</div><div class="ticket-meta"><strong>Kandidáti:</strong> ${generated.candidates.join(', ')}<br><strong>Euro dvojice:</strong> ${generated.euroPairs.map(p=>p.join(' + ')).join(' / ')}<br><strong>Vyřazeno:</strong> ${generated.blacklist.length?generated.blacklist.join(', '):'nic'}${generated.weights?'<br><strong>Váhy Ensemble:</strong> '+Object.entries(generated.weights).map(([k,v])=>`${labels[k]} ${Math.round(v*100)} %`).join(' · '):''}</div><div class="fine-print">${generated.overlapWarnings?`U ${generated.overlapWarnings} kombinací nebylo možné dodržet maximální překryv. Zvětši pool, uprav limit nebo vypni část filtrů.`:'Všechny kombinace dodržují limit překryvu.'} Euročísla vycházejí ze zvoleného režimu. V režimu 10 metod jsou řazena nezávisle na hlavním modelu. Nejde o spolehlivou předpověď.</div></article>`;
  $('downloadTickets').addEventListener('click',()=>download('lotto-ai-tikety.txt',`LOTTO AI • ${draws.at(-1).date}\nStrategie: ${config.strategy}\n`+generated.tickets.map((t,i)=>`${i+1}. ${t.main.join(' ')} | ${t.euro.join(' ')}`).join('\n')+'\n','text/plain;charset=utf-8'));
  $('saveTicketSet').addEventListener('click',()=>saveTicketSet(config));
  toast('Tikety připravené – bez záruky výhry.');
@@ -146,10 +146,10 @@ async function compareAll(){
  try{
   const results=await compareStrategiesAsync(draws,currentConfig(),(strategy,progressValue)=>progress(`${labels[strategy]} · celkem ${Math.round(progressValue*100)} %`));
   const best=results[0],rows=results.map((r,i)=>`<div class="rank-row"><strong>${i+1}.</strong><div><strong>${labels[r.strategy]}</strong><br><small>${r.model.totalMain} hlavních zásahů celkem</small></div><span>${r.model.threePlus} / ${r.baseline.threePlus}</span><span class="delta ${r.model.threePlus>r.baseline.threePlus?'positive':r.model.threePlus<r.baseline.threePlus?'negative':''}">${r.model.threePlus-r.baseline.threePlus>0?'+':''}${r.model.threePlus-r.baseline.threePlus}</span></div>`).join('');
-  $('backtestResults').innerHTML=`<article class="panel"><div class="eyebrow">SROVNÁNÍ 4 MODELŮ</div><h3>${best.tested} tahů · ${best.columns} sloupců na tah</h3><p class="fine-print">Toto je retrospektivní pořadí. Vítěz zvolený podle stejných dat může být přeučený.</p><div class="rank-row"><strong>#</strong><strong>Model</strong><span>3+ / náhoda</span><span>Rozdíl</span></div>${rows}</article>${chartHTML(best.timeline)}${financeHTML(best)}<article class="panel soft"><h3>Význam výsledků</h3><p class="body-copy">Zobrazen je i nejlepší model podle minulých výsledků; k jeho nezávislému ověření je potřeba forward test na budoucích tazích. Výsledky nejsou slibem výhry.</p></article>`;
+  $('backtestResults').innerHTML=`<article class="panel"><div class="eyebrow">SROVNÁNÍ MODELŮ</div><h3>${best.tested} tahů · ${best.columns} sloupců na tah</h3><p class="fine-print">Toto je retrospektivní pořadí. Vítěz zvolený podle stejných dat může být přeučený.</p><div class="rank-row"><strong>#</strong><strong>Model</strong><span>3+ / náhoda</span><span>Rozdíl</span></div>${rows}</article>${chartHTML(best.timeline)}${financeHTML(best)}<article class="panel soft"><h3>Význam výsledků</h3><p class="body-copy">Zobrazen je i nejlepší model podle minulých výsledků; k jeho nezávislému ověření je potřeba forward test na budoucích tazích. Výsledky nejsou slibem výhry.</p></article>`;
   lastBacktest=best;lastBacktestModel=labels[best.strategy]+' (vybrán zpětně)';progress('Porovnání dokončeno.');toast('Porovnání strategií dokončeno.');
  }catch(e){progress('Chyba: '+e.message);toast(e.message,true);}
- finally{btn.disabled=false;$('runBacktest').disabled=false;$('runMonteCarlo').disabled=false;btn.textContent='▤ Porovnat všechny 4 strategie';}
+ finally{btn.disabled=false;$('runBacktest').disabled=false;$('runMonteCarlo').disabled=false;btn.textContent='▤ Porovnat základní + vybraný model';}
 }
 async function runMonte(){
  if(!lastBacktest){toast('Nejprve spusť walk-forward test nebo porovnání modelů.',true);return;}
@@ -207,8 +207,8 @@ async function boot(){
  $('clearTickets').addEventListener('click',()=>{if(!savedSets.length)return;if(!confirm('Smazat všechny uložené sestavy?'))return;savedSets=[];persistSets();renderSavedTickets();});
  $('autoRefresh').checked=localStorage.getItem(AUTO)!=='false';
  $('autoRefresh').addEventListener('change',()=>{localStorage.setItem(AUTO,String($('autoRefresh').checked));});
- $('euroMode').addEventListener('change',()=>{$('fixedEuro').disabled=$('euroMode').value!=='fixed';});
- $('fixedEuro').disabled=$('euroMode').value!=='fixed';
+ $('euroMode').addEventListener('change',()=>{$('fixedEuro').disabled=$('euroMode').value!=='fixed';$('euroStrategy').disabled=$('euroMode').value!=='model';});
+ $('fixedEuro').disabled=$('euroMode').value!=='fixed';$('euroStrategy').disabled=$('euroMode').value!=='model';
  $('refreshData').addEventListener('click',()=>refresh(false));
  $('refreshFromOverview').addEventListener('click',()=>refresh(false));
  $('fileInput').addEventListener('change',e=>importFile(e.target.files[0]));
