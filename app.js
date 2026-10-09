@@ -19,7 +19,7 @@ const parseNums=(text,max)=>{
  if(nums.some(x=>!Number.isInteger(x)||x<1||x>max))throw Error('Čísla musí být v rozsahu 1–'+max+'.');
  return [...new Set(nums)];
 };
-const labels={ensemble:'LOTTO Ensemble AI',trend:'Trend Z 5/75',antitrend:'Antitrend Z 5/75',frequency:'Četnost',random:'Náhoda',...EXTRA_METHODS};
+const labels={hybridx:'LOTTO HYBRID X',ensemble:'LOTTO Ensemble AI',trend:'Trend Z 5/75',antitrend:'Antitrend Z 5/75',frequency:'Četnost',random:'Náhoda',...EXTRA_METHODS};
 const settings=()=>({strategy:$('strategy').value,count:Number($('ticketCount').value),pool:Number($('pool').value),filter:$('positionalFilter').checked,maxOverlap:Number($('maxOverlap').value),excludeLast:$('excludeLast').checked,manualExclude:parseNums($('manualExclude').value,50),euroMode:$('euroMode').value,euroStrategy:$('euroStrategy').value,fixedEuro:$('euroMode').value==='fixed'?parseNums($('fixedEuro').value,12):[]});
 function loadSets(){try{const value=JSON.parse(localStorage.getItem(SAVED)||'[]');if(Array.isArray(value))savedSets=value.filter(s=>/^\d{4}-\d\d-\d\d$/.test(s.asOf)&&Array.isArray(s.tickets)&&s.tickets.every(t=>t.main?.length===5&&t.euro?.length===2)).slice(-100);}catch{savedSets=[];}}
 function persistSets(){try{localStorage.setItem(SAVED,JSON.stringify(savedSets));return true;}catch{toast('Nelze uložit sestavy, exportuj si je.',true);return false;}}

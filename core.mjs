@@ -1,5 +1,5 @@
 /* LOTTO AI — analysis engine. No external dependencies; all models are heuristic. */
-export const RELEASE='2.2.0';
+export const RELEASE='2.3.0';
 export const HISTORY_URL='https://raw.githubusercontent.com/dev-baris/lottery-archive/main/eu/eurojackpot/results.csv';
 export const MAX_EURO=12;
 export const euroPoolAt=date=>date<'2014-10-10'?8:date<'2022-03-25'?10:12;
@@ -130,10 +130,25 @@ export function methodRanking(history,kind='main',method='hot15',targetDate=null
  return scores.map((score,i)=>({num:i+1,score})).sort((a,b)=>b.score-a.score||a.num-b.num);
 }
 
+
+// HYBRID X: fixed precommitted rank ensemble. No tuning on held-out test outcomes.
+// Rank fusion avoids mixing incomparable score scales from individual heuristics.
+export function hybridRanking(history,kind='main',targetDate=null){
+ const n=kind==='main'?50:euroPoolAt(targetDate||'2026-10-09');
+ const methods=kind==='main'?[['momentum',.25],['bayes',.20],['decay',.20],['hot15',.15],['reversal',.10],['gap',.10]]:[['bayes',.30],['decay',.25],['momentum',.20],['hot15',.15],['gap',.10]];
+ const scores=Array(n).fill(0);
+ for(const [method,weight] of methods){
+   const ranked=methodRanking(history,kind,method,targetDate);
+   ranked.forEach((row,idx)=>{if(row.num<=n)scores[row.num-1]+=weight*(n-idx)/n;});
+ }
+ return scores.map((score,i)=>({num:i+1,score})).sort((a,b)=>b.score-a.score||a.num-b.num);
+}
+
 export function ranking(history,{strategy='trend',filter=true,excludeLast=false,manualExclude=[]}={}){
   const ban=new Set(filter?positionalBlacklist(history):[]);
   if(excludeLast&&history.length)history.at(-1).main.forEach(n=>ban.add(n));
   for(const n of manualExclude||[])if(Number.isInteger(n)&&n>=1&&n<=50)ban.add(n);
+  if(strategy==='hybridx')return hybridRanking(history,'main').map(x=>({...x,excluded:ban.has(x.num)}));
   if(strategy==='ensemble'){
     const weights=ensembleWeights(history);
     const scores=Array(51).fill(0);
@@ -166,7 +181,7 @@ export function generateTickets(history,settings={}){
   const euroMax=euroPoolAt(opts.targetDate||'2026-10-09');
   const euroRanks=frequency(history,'euro',15).filter(x=>x.num<=euroMax).sort((a,b)=>b.count-a.count||a.num-b.num);
   const rng=rand(hash(history.at(-1)?.date)+Number(opts.seed)*1009);
-  const euroOrder=opts.euroMode==='model'?methodRanking(history,'euro',opts.euroStrategy,opts.targetDate):null;
+  const euroOrder=opts.euroMode==='model'?(opts.euroStrategy==='hybridx'?hybridRanking(history,'euro',opts.targetDate):methodRanking(history,'euro',opts.euroStrategy,opts.targetDate)):null;
   const orderedEuro=euroOrder?euroOrder.map(x=>x.num):opts.strategy==='random'?Array.from({length:euroMax},(_,i)=>i+1):euroRanks.map(x=>x.num);
   if(opts.strategy==='random')for(let i=orderedEuro.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[orderedEuro[i],orderedEuro[j]]=[orderedEuro[j],orderedEuro[i]];}
   let pairs=[sortNums(orderedEuro.slice(0,2)),sortNums(orderedEuro.slice(2,4))];
@@ -233,7 +248,7 @@ export function backtest(draws,opts={}){
 }
 
 export function compareStrategies(draws,config={}){
-  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...(EXTRA_METHODS[config.strategy]?[config.strategy]:[])])];
+  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...((EXTRA_METHODS[config.strategy]||config.strategy==='hybridx')?[config.strategy]:[])])];
   const results=strategies.map(strategy=>({strategy,...backtest(draws,{...config,strategy})}));
   return results.sort((a,b)=>b.model.threePlus-a.model.threePlus || b.model.totalMain-a.model.totalMain || a.strategy.localeCompare(b.strategy));
 }
@@ -268,7 +283,7 @@ export async function backtestAsync(draws,opts={},onProgress=()=>{}){
   return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings,timeline,dates:indices.map(i=>draws[i].date)};
 }
 export async function compareStrategiesAsync(draws,opts={},progress=()=>{}){
-  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...(EXTRA_METHODS[opts.strategy]?[opts.strategy]:[])])],out=[];
+  const strategies=[...new Set(['ensemble','trend','antitrend','frequency',...((EXTRA_METHODS[opts.strategy]||opts.strategy==='hybridx')?[opts.strategy]:[])])],out=[];
   for(let i=0;i<strategies.length;i++){
     const strategy=strategies[i];const r=await backtestAsync(draws,{...opts,strategy},fraction=>progress(strategy,(i+fraction)/strategies.length));
     out.push({strategy,...r});await yieldUI();
