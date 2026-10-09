@@ -1,5 +1,5 @@
 /* LOTTO AI — analysis engine. No external dependencies; all models are heuristic. */
-export const RELEASE='2.0.0';
+export const RELEASE='2.1.0';
 export const HISTORY_URL='https://raw.githubusercontent.com/dev-baris/lottery-archive/main/eu/eurojackpot/results.csv';
 export const MAX_EURO=12;
 export const euroPoolAt=date=>date<'2014-10-10'?8:date<'2022-03-25'?10:12;
@@ -128,21 +128,22 @@ export function generateTickets(history,settings={}){
   const candidates=ranked.filter(x=>!x.excluded).slice(0,Math.max(5,Math.min(50,Number(opts.pool)||12)));
   if(candidates.length<5)throw Error('Filtr vyřadil příliš mnoho čísel.');
   const pool=candidates.map((x,i)=>({num:x.num,weight:opts.strategy==='random'?0:1.35*(candidates.length-1-i)/Math.max(candidates.length-1,1)}));
-  const euroRanks=frequency(history,'euro',15).sort((a,b)=>b.count-a.count||a.num-b.num);
+  const euroMax=euroPoolAt(opts.targetDate||'2026-10-09');
+  const euroRanks=frequency(history,'euro',15).filter(x=>x.num<=euroMax).sort((a,b)=>b.count-a.count||a.num-b.num);
   const rng=rand(hash(history.at(-1)?.date)+Number(opts.seed)*1009);
-  const euroOrder=opts.strategy==='random'?Array.from({length:12},(_,i)=>i+1):euroRanks.map(x=>x.num);
+  const euroOrder=opts.strategy==='random'?Array.from({length:euroMax},(_,i)=>i+1):euroRanks.map(x=>x.num);
   if(opts.strategy==='random')for(let i=euroOrder.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[euroOrder[i],euroOrder[j]]=[euroOrder[j],euroOrder[i]];}
   let pairs=[sortNums(euroOrder.slice(0,2)),sortNums(euroOrder.slice(2,4))];
   if(opts.euroMode==='top')pairs=[pairs[0]];
   if(opts.euroMode==='fixed'){
     const nums=opts.fixedEuro||[];
-    if(nums.length!==2||new Set(nums).size!==2||nums.some(n=>!Number.isInteger(n)||n<1||n>12))throw Error('Zadej dvě různá euročísla od 1 do 12.');
+    if(nums.length!==2||new Set(nums).size!==2||nums.some(n=>!Number.isInteger(n)||n<1||n>euroMax))throw Error('Zadej dvě různá euročísla od 1 do '+euroMax+' pro testované období.');
     pairs=[sortNums(nums)];
   }
   const used=new Map();let tickets=[],violations=0;
   for(let j=0;j<opts.count;j++){
     let picked=null,best=null,bestPenalty=Infinity;
-    for(let attempt=0;attempt<1600;attempt++){
+    for(let attempt=0;attempt<(opts.maxAttempts||1600);attempt++){
       const test=weightedPick(pool,5,rng,used);
       const penalty=tickets.reduce((sum,t)=>sum+Math.max(0,intersection(test,t.main)-opts.maxOverlap),0);
       if(penalty<bestPenalty){bestPenalty=penalty;best=test;}
@@ -159,33 +160,36 @@ export function ticketHits(ticket,result){const main=intersection(ticket.main,re
 export function prizeTier(m,e){
   const tiers={'5-2':1,'5-1':2,'5-0':3,'4-2':4,'4-1':5,'3-2':6,'4-0':7,'2-2':8,'3-1':9,'3-0':10,'1-2':11,'2-1':12};return tiers[`${m}-${e}`]||null;
 }
-function evaluate(tickets,result,acc){
+function evaluate(tickets,result,acc,payouts){
   let bestMain=0,bestEuro=0,prize=0;
   for(const t of tickets){const m=intersection(t.main,result.main),e=intersection(t.euro,result.euro);
     acc.matrix[`${m}+${e}`]=(acc.matrix[`${m}+${e}`]||0)+1;
     bestMain=Math.max(bestMain,m);bestEuro=Math.max(bestEuro,e);
-    const tier=prizeTier(m,e);if(tier){acc.tiers[tier]=(acc.tiers[tier]||0)+1;prize++;}
+    const tier=prizeTier(m,e);if(tier){acc.tiers[tier]=(acc.tiers[tier]||0)+1;prize++;
+      const amount=payouts?.[result.date]?.[tier];
+      if(Number.isFinite(amount)&&amount>=0)acc.paid+=amount;else acc.unknownPayouts++;
+    }
     if(m>=3)acc.threePlus++;
     acc.totalMain+=m;acc.totalEuro+=e;
   }
   acc.drawsWithPrize+=Number(prize>0);acc.bestMain[bestMain]=(acc.bestMain[bestMain]||0)+1;
   acc.bestEuro[bestEuro]=(acc.bestEuro[bestEuro]||0)+1;
 }
-function newAcc(){return {matrix:{},tiers:{},drawsWithPrize:0,bestMain:{},bestEuro:{},threePlus:0,totalMain:0,totalEuro:0};}
+function newAcc(){return {matrix:{},tiers:{},drawsWithPrize:0,bestMain:{},bestEuro:{},threePlus:0,totalMain:0,totalEuro:0,paid:0,unknownPayouts:0};}
 export function backtest(draws,opts={}){
   const config={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,testDraws:100,minTrain:75,seed:1,...opts};
   const eligible=[];
-  for(let i=config.minTrain;i<draws.length;i++)if(draws[i].date>='2022-03-25')eligible.push(i);
-  const indices=eligible.slice(-Math.min(500,Math.max(1,Number(config.testDraws)||100)));
+  for(let i=config.minTrain;i<draws.length;i++)eligible.push(i);
+  const indices=eligible.slice(-Math.min(1000,Math.max(1,Number(config.testDraws)||100)));
   if(!indices.length)throw Error('Pro backtest je potřeba více historie.');
   const model=newAcc(),baseline=newAcc(),timeline=[];let warnings=0;
   for(const i of indices){
     const past=draws.slice(0,i),result=draws[i];
-    const generated=generateTickets(past,{...config,seed:i+config.seed});
+    const generated=generateTickets(past,{...config,targetDate:result.date,seed:i+config.seed});
     warnings+=generated.overlapWarnings;
-    evaluate(generated.tickets,result,model);
-    const rnd=generateTickets(past,{...config,strategy:'random',filter:false,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],pool:50,seed:i+config.seed+8888,maxOverlap:config.maxOverlap});
-    evaluate(rnd.tickets,result,baseline);
+    evaluate(generated.tickets,result,model,config.payouts);
+    const rnd=generateTickets(past,{...config,strategy:'random',filter:false,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],pool:50,seed:i+config.seed+8888,maxOverlap:config.maxOverlap,targetDate:result.date});
+    evaluate(rnd.tickets,result,baseline,config.payouts);
     timeline.push({date:result.date,model: model.threePlus,baseline:baseline.threePlus,modelHits:model.totalMain,baselineHits:baseline.totalMain});
   }
   return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings,timeline};
@@ -201,4 +205,96 @@ export function evaluateSavedSet(set,draws){
   if(!next)return {status:'pending',result:null,hits:[]};
   const hits=set.tickets.map(t=>ticketHits(t,next));
   return {status:'drawn',result:next,hits,prizes:hits.filter(h=>h.tier).length,threePlus:hits.filter(h=>h.main>=3).length};
+}
+
+// Running a full history on a phone should not freeze touch input: release the event loop
+// after each short, deterministic chunk. Results are identical to synchronous backtest.
+const yieldUI=()=>new Promise(resolve=>setTimeout(resolve,0));
+export async function backtestAsync(draws,opts={},onProgress=()=>{}){
+  const config={count:6,strategy:'trend',filter:true,pool:12,maxOverlap:2,testDraws:100,minTrain:75,seed:1,...opts};
+  const eligible=[];
+  for(let i=config.minTrain;i<draws.length;i++)eligible.push(i);
+  const indices=eligible.slice(-Math.min(1000,Math.max(1,Number(config.testDraws)||100)));
+  if(!indices.length)throw Error('Pro backtest je potřeba alespoň 76 losování.');
+  const model=newAcc(),baseline=newAcc(),timeline=[];let warnings=0;
+  for(let j=0;j<indices.length;j++){
+    const i=indices[j],past=draws.slice(0,i),result=draws[i];
+    const generated=generateTickets(past,{...config,seed:i+config.seed,targetDate:result.date});
+    warnings+=generated.overlapWarnings;
+    evaluate(generated.tickets,result,model,config.payouts);
+    const rnd=generateTickets(past,{...config,strategy:'random',filter:false,excludeLast:false,manualExclude:[],euroMode:'portfolio',fixedEuro:[],pool:50,seed:i+config.seed+8888,maxOverlap:config.maxOverlap,targetDate:result.date});
+    evaluate(rnd.tickets,result,baseline,config.payouts);
+    timeline.push({date:result.date,model:model.threePlus,baseline:baseline.threePlus,modelHits:model.totalMain,baselineHits:baseline.totalMain});
+    if(j%20===19){onProgress((j+1)/indices.length);await yieldUI();}
+  }
+  onProgress(1);
+  return {model,baseline,tested:indices.length,columns:config.count,first:draws[indices[0]].date,last:draws[indices.at(-1)].date,warnings,timeline,dates:indices.map(i=>draws[i].date)};
+}
+export async function compareStrategiesAsync(draws,opts={},progress=()=>{}){
+  const strategies=['ensemble','trend','antitrend','frequency'],out=[];
+  for(let i=0;i<strategies.length;i++){
+    const strategy=strategies[i];const r=await backtestAsync(draws,{...opts,strategy},fraction=>progress(strategy,(i+fraction)/strategies.length));
+    out.push({strategy,...r});await yieldUI();
+  }
+  return out.sort((a,b)=>b.model.threePlus-a.model.threePlus||b.model.totalMain-a.model.totalMain||a.strategy.localeCompare(b.strategy));
+}
+
+// Uniform-ticket benchmark, no drawn numbers looked at when choosing tickets.
+// Draw-dependent Eurojackpot pool size respects historical rule changes.
+function choose(n,k){let out=1;for(let i=1;i<=k;i++)out=out*(n-i+1)/i;return out;}
+function cumulativeProbs(population,winners,selected){const denom=choose(population,selected);let sum=0;return Array.from({length:Math.min(selected,winners)+1},(_,k)=>{
+  sum+=choose(winners,k)*choose(population-winners,selected-k)/denom;
+  return sum;
+});}
+function pickCum(r,cumulative){for(let i=0;i<cumulative.length-1;i++)if(r<cumulative[i])return i;return cumulative.length-1;}
+const MAIN_CDF=cumulativeProbs(50,5,5);
+const EURO_CDF=Object.fromEntries([8,10,12].map(n=>[n,cumulativeProbs(n,2,2)]));
+export async function monteCarloBenchmarks(dates,columns,observed={},reps=1000,onProgress=()=>{}){
+  if(!Array.isArray(dates)||!dates.length||!Number.isInteger(columns)||columns<1||columns>30)throw Error('Neplatné parametry náhodného benchmarku.');
+  const runs=Math.min(5000,Math.max(100,Number(reps)||1000)), groups={8:0,10:0,12:0};
+  for(const date of dates)groups[euroPoolAt(date)]++;
+  const vals3=[],valsPrize=[];
+  for(let trial=0;trial<runs;trial++){
+    const rng=rand(hash('lotto-ai-mc-2.1-'+trial)),n3={value:0},nPrize={value:0};
+    for(const [era,times] of Object.entries(groups)){
+      const trials=times*columns,euroCDF=EURO_CDF[era];
+      for(let j=0;j<trials;j++){
+        const m=pickCum(rng(),MAIN_CDF),e=pickCum(rng(),euroCDF);
+        if(m>=3)n3.value++;
+        if(prizeTier(m,e)!==null)nPrize.value++;
+      }
+    }
+    vals3.push(n3.value);valsPrize.push(nPrize.value);
+    if(trial%50===49){onProgress((trial+1)/runs);await yieldUI();}
+  }
+  vals3.sort((a,b)=>a-b);valsPrize.sort((a,b)=>a-b);
+  const q=(values,p)=>values[Math.floor((values.length-1)*p)];
+  const obs3=observed.threePlus??0,obsPrize=Object.values(observed.tiers||{}).reduce((a,b)=>a+b,0);
+  onProgress(1);
+  return {runs,columns,draws:dates.length,observed:{threePlus:obs3,prizes:obsPrize},threePlus:{p05:q(vals3,.05),median:q(vals3,.5),p95:q(vals3,.95),mean:vals3.reduce((a,b)=>a+b,0)/runs,pTail:(1+vals3.filter(x=>x>=obs3).length)/(runs+1)},prizes:{p05:q(valsPrize,.05),median:q(valsPrize,.5),p95:q(valsPrize,.95),mean:valsPrize.reduce((a,b)=>a+b,0)/runs,pTail:(1+valsPrize.filter(x=>x>=obsPrize).length)/(runs+1)}};
+}
+
+// Historical payout amounts are draw- and tier-specific and NOT fixed over time.
+export function parsePayoutCsv(csv){
+  const lines=String(csv).replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim());
+  if(!lines.length)return {payouts:{},imported:0,rejected:0};
+  const sep=lines[0].includes(';')?';':',';
+  const header=lines[0].toLowerCase().includes('date')||lines[0].toLowerCase().includes('datum');
+  const payouts={};let imported=0,rejected=0;
+  for(const row of lines.slice(header?1:0)){
+    const [dateText,tierText,amountText]=row.split(sep).map(x=>x.trim());
+    const date=parseDate(dateText),tier=Number(tierText),amount=Number(amountText.replace(/\s/g,'').replace(',','.'));
+    if(!date||!Number.isInteger(tier)||tier<1||tier>12||!Number.isFinite(amount)||amount<0){rejected++;continue;}
+    (payouts[date]??={})[tier]=amount;imported++;
+  }
+  return {payouts,imported,rejected};
+}
+export function financeFromBacktest(test,ticketCost=0){
+  const price=Number(ticketCost);
+  if(!Number.isFinite(price)||price<0)throw Error('Neplatná cena sloupce.');
+  const spending=Number((test.tested*test.columns*price).toFixed(2));
+  const winningCount=Object.values(test.model.tiers).reduce((a,b)=>a+b,0);
+  const complete=test.model.unknownPayouts===0;
+  return {spending,winningCount,paid:complete?Number(test.model.paid.toFixed(2)):null,net:complete?Number((test.model.paid-spending).toFixed(2)):null,missing:test.model.unknownPayouts,
+    knownPaid:Number(test.model.paid.toFixed(2)),complete};
 }

@@ -26,3 +26,35 @@
 .tabbar{grid-template-columns:repeat(5,minmax(0,1fr))}
 .tab{min-width:0}
 @media(max-width:650px){.tabbar{grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:7px}.tab{font-size:9px;padding:10px 1px;line-height:1.2}.tab span{font-size:18px;margin:0 0 5px}}
+
+/* LOTTO AI 2.1 — drill-down evaluation and forward ledger */
+.saved-set{padding:0;overflow:hidden}
+.saved-set>summary{list-style:none;cursor:pointer;padding:17px 16px;margin:0;display:flex;align-items:center;justify-content:space-between;min-height:86px}
+.saved-set>summary::-webkit-details-marker{display:none}
+.saved-set>summary:focus-visible{outline:2px solid var(--mint);outline-offset:-3px}
+.saved-set .saved-caption{display:block;margin:7px 0 0}
+.saved-set .chevron{font-size:26px;line-height:1;color:var(--mint);padding-left:10px;transition:transform .2s}
+.saved-set[open] .chevron{transform:rotate(180deg)}
+.saved-detail{border-top:1px solid #34516a;padding:14px}
+.draw-result{background:#102739;border:1px solid #2a6666;padding:15px;border-radius:12px;margin-bottom:14px}
+.draw-result strong{display:block;font-size:12px;margin-bottom:12px}
+.draw-result.pending{color:#e9ca99;border-color:#655235;font-size:12px}
+.draw-result .ball{width:33px;height:33px;font-size:12px}
+.ticket-detail{border:1px solid #33485d;background:#0f1c2e;border-radius:11px;padding:12px;margin:8px 0}
+.ticket-detail-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px}
+.ticket-detail-top strong{font-size:12px}
+.ticket-detail .ticket-balls{gap:5px;margin-bottom:9px}
+.ticket-detail .ball{width:36px;height:36px;font-size:12px}
+.ticket-detail .ball.hit{color:#0d332a;background:#67e4ae;box-shadow:0 3px 0 #23876c;outline:2px solid #d0ffeb}
+.ticket-detail .ball.euro.hit{color:#422a06;background:#ffdf77;box-shadow:0 3px 0 #b28932;outline:2px solid #fff1b0}
+.ticket-detail .ball.miss{opacity:.54}
+.ticket-score{color:#b3c2d3;font-size:11px;margin:0;min-width:0;white-space:normal}
+.ticket-score.winning{color:#81e6be;font-weight:850}
+.hit-description{display:block;font-size:11px;color:#a6becd;line-height:1.8}
+.saved-help{font-size:11px;color:#a5bacb;padding:0 2px 7px}
+.saved-detail .btn{margin-top:10px}
+.forward-metrics{display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:8px;margin:17px 0}
+.forward-metrics>div{padding:12px 6px;border-radius:11px;background:#1c3144;text-align:center}
+.forward-metrics strong{font-size:20px;display:block;color:#74e7ce}
+.forward-metrics small{display:block;font-size:10px;color:#b3c6d8;margin-top:7px;line-height:1.4}
+@media(max-width:650px){.forward-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.saved-set>summary{padding:14px 12px}.saved-detail{padding:10px}.ticket-detail .ball{width:30px;height:30px;font-size:11px}.ticket-detail .ticket-balls{gap:4px}.draw-result .ball{width:30px;height:30px}}
