@@ -6,12 +6,13 @@
 <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon-192.png" type="image/png"><link rel="apple-touch-icon" href="./icon-192.png">
 <title>LOTTO AI | Eurojackpot Lab</title>
 <link rel="stylesheet" href="./styles.css?v=23">
+<link rel="stylesheet" href="./agent-styles.css?v=30">
 </head>
 <body>
 <div class="shell">
 <header class="topbar"><div class="brand"><div class="brand-mark">✦</div><div><strong>LOTTO<span>AI</span></strong><small>EUROJACKPOT LAB</small></div></div><span id="connectBadge" class="connection">● OFFLINE READY</span></header>
-<div class="banner"><div class="eyebrow">EUROJACKPOT · LAB 2.3 <span class="chip">5 / 50 + 2 / 12</span></div><h1>Čísla pod lupou.<br><em>Rozhodnutí s daty.</em></h1><p>Analýza historie, generátor strategií a testování bez pohledu do budoucnosti. Žádná záruka výhry.</p><div class="banner-foot"><div><span class="metric-light" id="heroCount">—</span><span class="metric-caption">uložených losování</span></div><div><span class="metric-light" id="heroLatest">—</span><span class="metric-caption">poslední výsledek</span></div></div></div>
-<nav class="tabbar" aria-label="Sekce aplikace"><button type="button" class="tab active" data-tab="overview"><span>◫</span>Přehled</button><button type="button" class="tab" data-tab="generate"><span>◎</span>Generátor</button><button type="button" class="tab" data-tab="backtest"><span>▥</span>Backtest</button><button type="button" class="tab" data-tab="tickets"><span>▤</span>Moje tikety</button><button type="button" class="tab" data-tab="archive"><span>≡</span>Historie</button></nav>
+<div class="banner"><div class="eyebrow">EUROJACKPOT · LAB 3.0 <span class="chip">5 / 50 + 2 / 12</span></div><h1>Čísla pod lupou.<br><em>Rozhodnutí s daty.</em></h1><p>Analýza historie, generátor strategií a testování bez pohledu do budoucnosti. Žádná záruka výhry.</p><div class="banner-foot"><div><span class="metric-light" id="heroCount">—</span><span class="metric-caption">uložených losování</span></div><div><span class="metric-light" id="heroLatest">—</span><span class="metric-caption">poslední výsledek</span></div></div></div>
+<nav class="tabbar" aria-label="Sekce aplikace"><button type="button" class="tab active" data-tab="overview"><span>◫</span>Přehled</button><button type="button" class="tab" data-tab="generate"><span>◎</span>Generátor</button><button type="button" class="tab" data-tab="backtest"><span>▥</span>Backtest</button><button type="button" class="tab" data-tab="agents"><span>✦</span>6 agentů</button><button type="button" class="tab" data-tab="tickets"><span>▤</span>Moje tikety</button><button type="button" class="tab" data-tab="archive"><span>≡</span>Historie</button></nav>
 <main>
 <section id="overview" class="page active">
  <div class="section-heading"><div><div class="eyebrow">DASHBOARD</div><h2>Statistický přehled</h2></div><button class="btn mini" id="refreshFromOverview" type="button">↻ Aktualizovat</button></div>
@@ -32,7 +33,16 @@
  <div id="backtestResults" class="result-area"><div class="empty-state"><div class="empty-icon">▥</div><strong>Model versus náhoda</strong><p>Spusť simulaci a porovnej historické zásahy.</p></div></div>
  <div id="monteResults" class="result-area"></div>
 </section>
-<section id="tickets" class="page">
+<section id="agents" class="page">
+  <div class="section-heading"><div><div class="eyebrow">EUROJACKPOT AI 3.0</div><h2>Šest analytických agentů</h2></div><span class="pill">Jen generování</span></div>
+  <article class="panel"><h3>Kontrolovatelný proces</h3><p class="body-copy">Researcher → Data Analyst → Strategist → Coder / Backtest → Risk Manager → Boss. Jde o šest transparentních výpočetních modulů, nikoli o šest připojených placených AI služeb. Nepodávají sázky.</p>
+   <button class="btn wide" type="button" id="agentUseSettings">↻ Převzít nastavení generátoru</button><p class="fine-print" id="agentConfigHint">Načítám nastavení…</p>
+   <label class="field-label">Rozsah walk-forward testu<select id="agentTestCount" class="select"><option value="30">30 losování</option><option value="50" selected>50 losování</option><option value="100">100 losování (pokud je k dispozici)</option><option value="200">200 losování (pokud je k dispozici)</option></select></label>
+   <label class="toggle-row compact"><input id="agentSourceChecked" type="checkbox"><span class="switch"></span><span><strong>Ověřil jsem historii proti oficiálním výsledkům</strong><small>Potvrzuj pouze po skutečném porovnání. Aplikace nepředstírá nezávislé ověření dat.</small></span></label>
+   <div class="agent-toolbar"><button class="btn primary" type="button" id="runAgents">✦ Spustit kontrolu 6 agentů</button><button class="btn" type="button" id="exportAgentReport" disabled>↓ Export protokolu</button></div><p id="agentProgress" class="status-line" role="status" aria-live="polite">Připraveno. Pro schválení generování je nutný platný archiv, minimálně 30 historicky testovaných tahů a potvrzení zdroje.</p>
+  </article><div class="result-area" id="agentResults"><div class="empty-state"><strong>Protokol čeká na spuštění</strong><p>Nejdříve zkontroluj zdroj a nastavení generátoru.</p></div></div>
+ </section>
+ <section id="tickets" class="page">
  <div class="section-heading"><div><div class="eyebrow">EVIDENCE</div><h2>Moje uložené tikety</h2></div><span class="pill" id="savedCount">0 sestav</span></div>
  <article class="panel"><h3>Rozklikávací kontrola tiketů po losování</h3><p class="body-copy">Každou sestavu můžeš rozkliknout. Aplikace porovná každý sloupec s prvním známým losováním po datu jeho vytvoření, barevně označí trefená čísla a zobrazí výherní třídu. Sestavy čekající na výsledek zůstanou bez hodnocení. Vše zůstává ve tvém telefonu.</p><div class="action-grid"><button class="btn" type="button" id="exportTickets">↓ Exportovat evidenci</button><button class="btn danger" type="button" id="clearTickets">Smazat evidenci</button></div></article>
  <article class="panel soft"><div class="eyebrow">FORWARD TEST</div><h3>Průběžné výsledky uložených sestav</h3><div class="status-line" id="forwardSummary">Zatím není co vyhodnotit.</div><p class="fine-print">Počítají se pouze tikety uložené v tomto zařízení. Jde o místní evidenci, nikoli nezměnitelný externě ověřený záznam.</p></article>
@@ -42,12 +52,12 @@
  <div class="section-heading"><div><div class="eyebrow">DATOVÉ CENTRUM</div><h2>Archiv výsledků</h2></div></div>
  <article class="panel"><div class="source-head"><span class="status-dot"></span><div><strong id="archiveCount">Načítání archivu</strong><small id="archiveRange">—</small></div></div><div class="action-grid"><button class="btn primary" type="button" id="refreshData">↻ Stáhnout aktualizace</button><label class="btn upload" for="fileInput">⇧ Importovat CSV<input id="fileInput" type="file" accept=".csv,text/csv,text/plain" hidden></label><button class="btn" type="button" id="exportData">↓ Exportovat CSV</button><button class="btn" type="button" id="toggleAdd">＋ Přidat losování</button></div><label class="toggle-row compact"><input type="checkbox" id="autoRefresh" checked><span class="switch"></span><span><strong>Automaticky hledat nová losování při spuštění</strong><small id="syncStatus">Aktualizace probíhá jen s připojením k internetu.</small></span></label><p class="fine-print">Stahování z veřejného komunitního archivu GitHub; výsledky před sázením ověř na oficiálním webu. CSV zůstává uloženo na zařízení.</p><div id="addDrawForm" class="add-form hidden"><label>Datum losování<input type="date" id="manualDate"></label><label>5 hlavních + 2 euročísla (odděl mezerami)<input id="manualNumbers" placeholder="7 12 19 28 50 | 1 6"></label><button class="btn primary" type="button" id="saveManual">Uložit výsledek</button></div></article>
  <article class="panel"><div class="panel-head"><h3>Poslední výsledky</h3><span class="pill" id="shownCount">—</span></div><div id="historyList" class="history-list"></div><button type="button" id="showMore" class="btn wide">Zobrazit další</button></article>
- <article class="panel soft"><h3>Soukromí a technické informace</h3><p class="body-copy">Výpočty probíhají ve tvém prohlížeči. Údaje se ukládají lokálně. Aplikace neodesílá tipy ani nepřijímá sázky.</p><button class="btn danger" id="resetData" type="button">Obnovit výchozí archiv</button><div class="fine-print">PWA verze 2.1 · <a href="https://github.com/dev-baris/lottery-archive" target="_blank" rel="noopener noreferrer">zdroj veřejného archivu</a></div></article>
+ <article class="panel soft"><h3>Soukromí a technické informace</h3><p class="body-copy">Výpočty probíhají ve tvém prohlížeči. Údaje se ukládají lokálně. Aplikace neodesílá tipy ani nepřijímá sázky.</p><button class="btn danger" id="resetData" type="button">Obnovit výchozí archiv</button><div class="fine-print">PWA verze 3.0 · <a href="https://github.com/dev-baris/lottery-archive" target="_blank" rel="noopener noreferrer">zdroj veřejného archivu</a></div></article>
 </section>
 </main>
 <footer>LOTTO AI <span>•</span> Eurojackpot Research Lab <span>•</span> 18+ <br><small>Výsledky analýzy nejsou zárukou výhry. Hraj odpovědně.</small></footer>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./app.js?v=23"></script>
+<script type="module" src="./app.js?v=30"></script>
 </body>
 </html>

@@ -1,0 +1,21 @@
+/* LOTTO AI v3 — responsive six-agent workspace */
+.tabbar{grid-template-columns:repeat(6,minmax(0,1fr))}
+.agent-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}
+.agent-stats>div{display:flex;flex-direction:column;gap:7px;background:#182a3c;border:1px solid #2a4658;padding:13px;border-radius:12px}
+.agent-stats strong{font-size:22px;color:#d8f7f1}
+.agent-stats small{font-size:10px;color:var(--muted);line-height:1.4}
+.agent-good{color:#7fe6d3}.agent-alert{color:#ffb9a8}
+.agent-problems{border-left:3px solid #e3b47d;padding:10px;margin-top:12px;background:#46352c45;font-size:12px;line-height:1.7}
+.agent-steps{display:flex;flex-direction:column;gap:9px;margin-top:16px}
+.agent-step{border:1px solid #30465f;background:#172438;border-radius:12px;overflow:hidden}
+.agent-step summary{list-style:none;display:flex;gap:11px;align-items:center;padding:14px 12px;cursor:pointer}
+.agent-step summary::-webkit-details-marker{display:none}
+.agent-step summary strong{font-size:13px;flex:1}
+.agent-index{border-radius:100%;background:#254754;color:#97eee0;display:grid;place-items:center;width:27px;height:27px;font-size:13px;font-weight:800}
+.agent-expand{color:var(--muted);font-size:10px}
+.agent-step pre{color:#d3e0ef;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;padding:14px;margin:0;border-top:1px solid #2b4356}
+.agent-balls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.agent-balls .ball{width:34px;height:34px;font-size:12px}
+.agent-toolbar{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
+.agent-toolbar .btn{flex:1}
+@media(max-width:650px){.tabbar{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}.tab{font-size:10px;padding:8px 2px}.tab span{font-size:18px}.agent-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.agent-balls .ball{width:29px;height:29px;font-size:11px}}

@@ -1,3 +1,4 @@
+import {initAgentTeam} from './agent-team.mjs';
 import {RELEASE,HISTORY_URL,parseCsv,toCsv,mergeDraws,frequency,ranking,generateTickets,backtestAsync,compareStrategiesAsync,monteCarloBenchmarks,financeFromBacktest,parsePayoutCsv,evaluateSavedSet,EXTRA_METHODS} from './core.mjs';
 const $=id=>document.getElementById(id);
 const STORE='lotto-ai-eurojackpot-history-v1';
@@ -224,7 +225,8 @@ async function boot(){
   renderAll();
   if(navigator.onLine!==false&&$('autoRefresh').checked)refresh(true);
  }catch(e){toast('Nelze načíst data: '+e.message,true);renderAll();}
- if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  initAgentTeam({getDraws:()=>draws,getSettings:settings,notify:toast});
+  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   let reloaded=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!reloaded){reloaded=true;location.reload();}});
   navigator.serviceWorker.register('./service-worker.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});

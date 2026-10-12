@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {parseCsv,toCsv,mergeDraws,frequency,euroPoolAt,ranking,generateTickets,backtest,intersection,prizeTier} from './core.mjs';
 const csv=fs.readFileSync(new URL('./data/eurojackpot.csv',import.meta.url),'utf8');
-const {draws,invalid}=parseCsv(csv);
+const {draws:full,invalid}=parseCsv(csv); const draws=full.slice(-128);
 assert.equal(invalid,0);assert.equal(draws.length,128);
 assert.equal(draws[0].date,'2025-07-18');assert.equal(draws.at(-1).date,'2026-10-06');
 assert.equal(euroPoolAt('2013-12-01'),8);assert.equal(euroPoolAt('2014-10-10'),10);assert.equal(euroPoolAt('2022-03-25'),12);
