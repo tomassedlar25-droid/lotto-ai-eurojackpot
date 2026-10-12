@@ -1,4 +1,5 @@
 import {initAgentTeam} from './agent-team.mjs';
+import {makeAgentSavedSet} from './agent-save.mjs';
 import {RELEASE,HISTORY_URL,parseCsv,toCsv,mergeDraws,frequency,ranking,generateTickets,backtestAsync,compareStrategiesAsync,monteCarloBenchmarks,financeFromBacktest,parsePayoutCsv,evaluateSavedSet,EXTRA_METHODS} from './core.mjs';
 const $=id=>document.getElementById(id);
 const STORE='lotto-ai-eurojackpot-history-v1';
@@ -22,6 +23,20 @@ const parseNums=(text,max)=>{
 };
 const labels={hybridx:'LOTTO HYBRID X',ensemble:'LOTTO Ensemble AI',trend:'Trend Z 5/75',antitrend:'Antitrend Z 5/75',frequency:'Četnost',random:'Náhoda',...EXTRA_METHODS};
 const settings=()=>({strategy:$('strategy').value,count:Number($('ticketCount').value),pool:Number($('pool').value),filter:$('positionalFilter').checked,maxOverlap:Number($('maxOverlap').value),excludeLast:$('excludeLast').checked,manualExclude:parseNums($('manualExclude').value,50),euroMode:$('euroMode').value,euroStrategy:$('euroStrategy').value,fixedEuro:$('euroMode').value==='fixed'?parseNums($('fixedEuro').value,12):[]});
+function saveAgentSet({config,tickets,asOf,status}) {
+ if(status!=='APPROVE FOR GENERATION ONLY'){toast('Risk Manager neschválil generování.',true);return {ok:false};}
+ try {
+  const prepared=makeAgentSavedSet({draws,config,tickets,existing:savedSets,asOf,createdAt:new Date().toISOString()});
+  if(prepared.duplicate){toast('Tato sestava již je v Mých tiketech.');showTab('tickets');return {ok:true,duplicate:true};}
+  const previous=savedSets;
+  savedSets=[...savedSets,prepared.record].slice(-100);
+  if(!persistSets()){savedSets=previous;return {ok:false};}
+  renderSavedTickets();
+  showTab('tickets');
+  toast('Uloženo do Mých tiketů. Čeká na první známé losování po '+asOf+'.');
+  return {ok:true,duplicate:false};
+ }catch(err){toast(err.message,true);return {ok:false};}
+}
 function loadSets(){try{const value=JSON.parse(localStorage.getItem(SAVED)||'[]');if(Array.isArray(value))savedSets=value.filter(s=>/^\d{4}-\d\d-\d\d$/.test(s.asOf)&&Array.isArray(s.tickets)&&s.tickets.every(t=>t.main?.length===5&&t.euro?.length===2)).slice(-100);}catch{savedSets=[];}}
 function persistSets(){try{localStorage.setItem(SAVED,JSON.stringify(savedSets));return true;}catch{toast('Nelze uložit sestavy, exportuj si je.',true);return false;}}
 
@@ -97,7 +112,7 @@ function renderSavedTickets(){
      const matchedEuro=drawn?ticket.euro.filter(n=>result.euro.includes(n)).join(', '):'';
      return `<div class="ticket-detail"><div class="ticket-detail-top"><strong>Sloupec ${j+1}</strong><span class="ticket-score ${hit?.tier?'winning':''}">${tScore}</span></div><div class="ticket-balls">${markedTicket(ticket,result)}</div>${drawn?`<small class="hit-description">Trefená hlavní: ${matched||'žádná'} · euro: ${matchedEuro||'žádná'}</small>`:''}</div>`;
    }).join('');
-   return `<details class="saved-set" data-id="${id}" ${openIds.has(id)?'open':''}><summary class="saved-set-head"><div><strong>${labels[set.strategy]||'Strategie'}</strong><br><small>${set.tickets.length} sloupců · z dat do ${dateCZ(set.asOf)}</small><span class="saved-caption saved-status ${drawn?'':'pending'}">${status}</span></div><span class="chevron" aria-hidden="true">⌄</span></summary><div class="saved-detail">${resultMarkup}<div class="saved-help">${drawn?'Barevně zvýrazněné koule byly vylosované.':'Tikety zůstávají bez výsledku, dokud nebude známé další losování.'}</div>${rows}<button class="btn danger mini" type="button" data-delete-set="${id}">Smazat tuto sestavu</button></div></details>`;
+   return `<details class="saved-set" data-id="${id}" ${openIds.has(id)?'open':''}><summary class="saved-set-head"><div><strong>${set.source==='six-agents'?'✦ 6 agentů · ':''}${labels[set.strategy]||'Strategie'}</strong><br><small>${set.tickets.length} sloupců · z dat do ${dateCZ(set.asOf)}</small><span class="saved-caption saved-status ${drawn?'':'pending'}">${status}</span></div><span class="chevron" aria-hidden="true">⌄</span></summary><div class="saved-detail">${resultMarkup}<div class="saved-help">${drawn?'Barevně zvýrazněné koule byly vylosované.':'Tikety zůstávají bez výsledku, dokud nebude známé další losování.'}</div>${rows}<button class="btn danger mini" type="button" data-delete-set="${id}">Smazat tuto sestavu</button></div></details>`;
  }).join('')||'<div class="empty-state"><strong>Žádné uložené sestavy</strong><p>Vygeneruj a ulož první sadu.</p></div>';
  region.querySelectorAll('[data-delete-set]').forEach(b=>b.addEventListener('click',()=>{if(!confirm('Smazat tuto sestavu?'))return;savedSets=savedSets.filter(s=>s.id!==b.dataset.deleteSet);persistSets();renderSavedTickets();}));
 }
@@ -225,7 +240,7 @@ async function boot(){
   renderAll();
   if(navigator.onLine!==false&&$('autoRefresh').checked)refresh(true);
  }catch(e){toast('Nelze načíst data: '+e.message,true);renderAll();}
-  initAgentTeam({getDraws:()=>draws,getSettings:settings,notify:toast});
+  initAgentTeam({getDraws:()=>draws,getSettings:settings,notify:toast,saveAgentSet});
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   let reloaded=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!reloaded){reloaded=true;location.reload();}});
